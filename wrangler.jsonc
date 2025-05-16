@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "website-screenshot",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-16",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SCREENSHOTS_BUCKET",
+      "bucket_name": "screenshots-bucket",
+      "preview_bucket_name": "screenshots-preview-bucket"
+    }
+  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCREENSHOT_BROWSER_DO",
+        "class_name": "ScreenshotBrowserDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ScreenshotBrowserDO"]
+    }
+  ],
+  "images": {
+    "binding": "IMAGES",
+  } 
+}

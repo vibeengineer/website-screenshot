@@ -1,0 +1,20 @@
+{
+  "name": "website-screenshot",
+  "scripts": {
+    "dev": "wrangler dev --remote",
+    "deploy": "wrangler deploy --minify",
+    "types": "npx wrangler types",
+    "test:node-screenshots": "node test/save-screenshots-node.js"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.0.2",
+    "hono": "^4.7.9"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@cloudflare/vitest-pool-workers": "^0.8.30",
+    "@types/node": "^22.15.18",
+    "vitest": "~3.1.3",
+    "wrangler": "^4.4.0"
+  }
+}
