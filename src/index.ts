@@ -7,7 +7,6 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.get("/screenshot", async (c) => {
   const targetUrl = c.req.query("url");
-  const directOutput = c.req.query("directOutput") === "true";
 
   if (!targetUrl) {
     return c.text("Missing 'url' query parameter", 400);
@@ -19,19 +18,11 @@ app.get("/screenshot", async (c) => {
     // though not strictly necessary for RPC to work if methods are public.
     const stub = c.env.SCREENSHOT_BROWSER_DO.get(doId) as unknown as ScreenshotBrowserDO;
 
-    // Call the RPC method
-    const result = await stub.takeScreenshotJob(targetUrl, directOutput);
+    // Call the RPC method - directOutput is now implicit
+    const result = await stub.takeScreenshotJob(targetUrl);
 
-    if (directOutput && result instanceof ArrayBuffer) {
-      return new Response(result, { headers: { "Content-Type": "image/png" }, status: 200 });
-    }
-    if (!directOutput && typeof result === "string") {
-      return c.json({ success: true, r2Key: result }, 200);
-    }
-
-    // This case implies an unexpected result type from the DO not covered above or an error that wasn't thrown.
-    console.error("Mismatched result type from DO RPC call or unexpected result.", { result });
-    return c.text("Internal error: Mismatched or unexpected result type from Durable Object.", 500);
+    // Result is always ArrayBuffer
+    return new Response(result, { headers: { "Content-Type": "image/png" }, status: 200 });
   } catch (error) {
     console.error("Error in /screenshot endpoint (RPC call to DO):", error);
 

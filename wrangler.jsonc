@@ -6,13 +6,6 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "r2_buckets": [
-    {
-      "binding": "SCREENSHOTS_BUCKET",
-      "bucket_name": "screenshots-bucket",
-      "preview_bucket_name": "screenshots-preview-bucket"
-    }
-  ],
   "browser": {
     "binding": "BROWSER"
   },

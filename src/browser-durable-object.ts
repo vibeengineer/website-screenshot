@@ -27,7 +27,7 @@ export class ScreenshotBrowserDO extends DurableObject<Env> {
   private queue: QueuedRequest[] = [];
   private pending = new Map<
     string,
-    { resolve: (v: ArrayBuffer | string) => void; reject: (e: unknown) => void }
+    { resolve: (v: ArrayBuffer) => void; reject: (e: unknown) => void }
   >();
   private processing = false;
 
@@ -51,9 +51,9 @@ export class ScreenshotBrowserDO extends DurableObject<Env> {
   }
 
   /* ───────────────────────────────────────── public API ───── */
-  takeScreenshotJob(targetUrl: string, directOutput = false): Promise<ArrayBuffer | string> {
+  takeScreenshotJob(targetUrl: string): Promise<ArrayBuffer> {
     const id = crypto.randomUUID();
-    this.queue.push({ id, targetUrl, directOutput, enqueueTime: Date.now() });
+    this.queue.push({ id, targetUrl, enqueueTime: Date.now() });
     void this.kickoffQueue();
     return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
   }
@@ -149,7 +149,7 @@ export class ScreenshotBrowserDO extends DurableObject<Env> {
 
     try {
       const result = await this.withTimeout(
-        this.takeScreenshot(job.targetUrl, session, job.directOutput),
+        this.takeScreenshot(job.targetUrl, session),
         this.SCREENSHOT_TIMEOUT_MS,
         "Screenshot timed out"
       );
@@ -192,11 +192,7 @@ export class ScreenshotBrowserDO extends DurableObject<Env> {
   }
 
   /* ───────────────────────────────────────── screenshot ───── */
-  private async takeScreenshot(
-    url: string,
-    session: BrowserSession,
-    direct: boolean
-  ): Promise<ArrayBuffer | string> {
+  private async takeScreenshot(url: string, session: BrowserSession): Promise<ArrayBuffer> {
     if (!session.browser) throw new Error("Browser not available");
 
     const page: PuppeteerPage = await session.browser.newPage();
@@ -206,16 +202,7 @@ export class ScreenshotBrowserDO extends DurableObject<Env> {
 
       const puppeteerBuffer = await page.screenshot(); // This is a Buffer (Uint8Array-like)
       const rawBuf: ArrayBuffer = puppeteerBuffer.buffer as ArrayBuffer;
-      const processed = await this.postProcess(rawBuf);
-
-      if (direct) return processed;
-
-      const host = new URL(url).hostname.replace(/[^a-z0-9_.-]/gi, "_").slice(0, 100);
-      const key = `screenshots/${Date.now()}_${host}.png`;
-      await this.env.SCREENSHOTS_BUCKET.put(key, processed, {
-        httpMetadata: { contentType: "image/png" },
-      });
-      return key;
+      return this.postProcess(rawBuf);
     } finally {
       await page.close();
     }

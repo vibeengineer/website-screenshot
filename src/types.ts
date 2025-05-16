@@ -18,5 +18,5 @@ export type QueuedRequest = {
   id: string;
   targetUrl: string;
   enqueueTime: number;
-  directOutput: boolean; // To indicate if direct image output is requested
+  // directOutput: boolean; // To indicate if direct image output is requested
 };
