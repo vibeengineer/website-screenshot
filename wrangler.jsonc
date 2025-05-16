@@ -9,6 +9,9 @@
   "browser": {
     "binding": "BROWSER"
   },
+  "observability": {
+    "enabled": true
+  },
   "durable_objects": {
     "bindings": [
       {
