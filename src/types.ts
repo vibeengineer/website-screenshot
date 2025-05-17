@@ -18,8 +18,3 @@ export type QueuedRequest = {
   targetUrl: string;
   enqueueTime: number;
 };
-
-export interface CaptchaSolveResult {
-  solved: boolean;
-  error?: string;
-}
