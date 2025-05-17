@@ -91,16 +91,18 @@ function validateBrowserbaseCredentials(): { apiKey: string; projectId: string }
 
 function getDefaultProxySettings(): ProxyConfig[] | boolean {
   // By default, don't use proxies unless explicitly configured
-  const useProxies = process.env.USE_PROXIES === 'true';
+  const useProxies = process.env.USE_PROXIES === "true";
   if (!useProxies) return false;
-  
+
   // Return a default US-based proxy if enabled but not configured
-  return [{
-    type: "browserbase",
-    geolocation: {
-      country: "US"
-    }
-  }];
+  return [
+    {
+      type: "browserbase",
+      geolocation: {
+        country: "US",
+      },
+    },
+  ];
 }
 
 function createBrowserSettings(options: ScreenshotOptions): BrowserSettings {
@@ -168,9 +170,49 @@ async function getRawScreenshot(
     );
     await page.setViewportSize({ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT });
 
+    // Add initial scrollbar hiding
+    await page.addStyleTag({
+      content: `
+        ::-webkit-scrollbar { display: none !important; }
+        * { 
+          -ms-overflow-style: none !important;
+          scrollbar-width: none !important;
+          overflow: -moz-scrollbars-none !important;
+        }
+        html, body {
+          overflow: hidden !important;
+          scrollbar-width: none !important;
+        }
+      `,
+    });
+
     await page.goto(targetUrl, {
       waitUntil: "networkidle",
       timeout: PAGE_GOTO_TIMEOUT,
+    });
+
+    // Ensure scrollbar is hidden after page load
+    await page.evaluate(() => {
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      const style = document.createElement("style");
+      style.textContent = `
+        ::-webkit-scrollbar { 
+          width: 0px !important;
+          height: 0px !important;
+          display: none !important;
+        }
+        * { 
+          -ms-overflow-style: none !important;
+          scrollbar-width: none !important;
+          overflow: -moz-scrollbars-none !important;
+        }
+        html, body {
+          overflow: hidden !important;
+          scrollbar-width: none !important;
+        }
+      `;
+      document.head.appendChild(style);
     });
 
     await page.waitForTimeout(2000);
@@ -207,11 +249,36 @@ async function connectToBrowser(connectUrl: string): Promise<Browser> {
   return Promise.race([browserPromise, timeoutPromise]);
 }
 
-async function setupPage(page: Page, requestSessionId: string, options: ScreenshotOptions): Promise<void> {
+async function setupPage(
+  page: Page,
+  requestSessionId: string,
+  options: ScreenshotOptions
+): Promise<void> {
   console.log(`[screenshotService] [${requestSessionId}] Initializing adblocker...`);
   const blocker = await PlaywrightBlocker.fromPrebuiltAdsAndTracking(fetch);
   await blocker.enableBlockingInPage(page);
   console.log(`[screenshotService] [${requestSessionId}] Adblocker enabled.`);
+
+  // Add initial scrollbar hiding styles
+  await page.addStyleTag({
+    content: `
+      ::-webkit-scrollbar { 
+        width: 0px !important;
+        height: 0px !important;
+        display: none !important;
+      }
+      * { 
+        -ms-overflow-style: none !important;
+        scrollbar-width: none !important;
+        overflow: -moz-scrollbars-none !important;
+      }
+      html, body {
+        overflow: hidden !important;
+        scrollbar-width: none !important;
+      }
+    `,
+  });
+  console.log(`[screenshotService] [${requestSessionId}] Initial scrollbar hiding styles added.`);
 
   if (options.solveCaptchas !== false) {
     page.on("console", (msg) => {
@@ -238,13 +305,10 @@ async function cleanupResources(
       );
       await browser.close();
     } catch (closeError) {
-      console.error(
-        `[screenshotService] [${requestSessionId}] Error closing browser:`,
-        closeError
-      );
+      console.error(`[screenshotService] [${requestSessionId}] Error closing browser:`, closeError);
     }
   }
-  
+
   if (browserbaseSessionId) {
     try {
       const hasMoreItems = queueManager.hasQueuedItems();
@@ -335,7 +399,12 @@ function logCompletionTime(startTime: number, requestSessionId: string, targetUr
   );
 }
 
-function logError(error: unknown, startTime: number, requestSessionId: string, targetUrl: string): void {
+function logError(
+  error: unknown,
+  startTime: number,
+  requestSessionId: string,
+  targetUrl: string
+): void {
   const totalTime = Date.now() - startTime;
   console.error(
     `[screenshotService] [${requestSessionId}] Error taking screenshot for ${targetUrl} after ${totalTime}ms:`,
