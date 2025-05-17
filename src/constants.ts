@@ -7,7 +7,7 @@ export const BROWSER_CONNECT_TIMEOUT = 10_000;
 export const SCREENSHOT_TIMEOUT = 15_000;
 export const QUEUE_TIMEOUT = 10 * MINUTE;
 
-export const MAX_CONCURRENT_BROWSER_SESSIONS = 1;
+export const MAX_CONCURRENT_BROWSER_SESSIONS = 10;
 
 export const BASE_IMAGE_URL = "https://files.duckhou.se/website-screenshot/base.png";
 export const OVERLAY_IMAGE_URL = "https://files.duckhou.se/website-screenshot/overlay.png";

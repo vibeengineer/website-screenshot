@@ -5,10 +5,10 @@ import { Hono } from "hono";
 config();
 
 import { queueManager } from "./queue";
-import { takeScreenshotWithBrowserbase } from "./screenshot";
+import { takeScreenshotWithBrowserless } from "./screenshot";
 
 queueManager.setScreenshotExecutor(async (targetUrl, sessionId) => {
-  const result = await takeScreenshotWithBrowserbase(targetUrl, sessionId);
+  const result = await takeScreenshotWithBrowserless(targetUrl, sessionId);
   return result.buffer;
 });
 
@@ -35,7 +35,7 @@ app.get("/screenshot", async (c) => {
     );
 
     c.header("Content-Type", "image/png");
-    c.header("X-Browserbase-Session-Id", result.sessionId);
+    c.header("X-Browserless-Session-Id", result.sessionId);
     return c.body(result.buffer);
   } catch (error) {
     console.error(`[index.ts] Error in /screenshot route for ${targetUrl}:`, error);

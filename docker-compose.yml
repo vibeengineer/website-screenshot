@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - BROWSERLESS_URL=http://browserless:3000
+      - NODE_ENV=production
+    depends_on:
+      - browserless
+    volumes:
+      - ./public:/app/public
+    restart: unless-stopped
+
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    ports:
+      - "3100:3000"  # External port 3100, internal port 3000
+    environment:
+      - MAX_CONCURRENT_SESSIONS=5
+      - CONNECTION_TIMEOUT=60000
+      - WORKSPACE_DELETE_EXPIRED=true
+      - WORKSPACE_EXPIRE_DAYS=7
+      - DEFAULT_BLOCK_ADS=true
+      - TOKEN=browserless_token  # Remove or change for production
+    restart: unless-stopped
+    # Increase shared memory size to improve browser stability
+    shm_size: 1gb
