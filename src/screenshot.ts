@@ -14,9 +14,11 @@ import {
 import { BrowserConnectionError, ScreenshotTimeoutError } from "./errors";
 import { queueManager } from "./queue";
 import { putScreenshotInsideTemplate } from "./template";
+import { CaptchaSolveResult } from "./types";
 
 interface ScreenshotOptions {
   adBlock?: boolean;
+  solveCaptchas?: boolean;
 }
 
 // Track active browser
@@ -127,6 +129,30 @@ async function setupPage(
   console.log(`[screenshotService] [${requestSessionId}] Scrollbar hiding styles added.`);
 }
 
+/**
+ * Listen for captcha detection events
+ */
+async function waitForCaptcha(cdpSession: any): Promise<void> {
+  return new Promise((resolve) => {
+    cdpSession.on("Browserless.captchaFound", () => {
+      console.log("Captcha detected!");
+      resolve();
+    });
+  });
+}
+
+/**
+ * Solve captcha using browserless API
+ */
+async function solveCaptcha(cdpSession: any): Promise<CaptchaSolveResult> {
+  try {
+    return await cdpSession.send("Browserless.solveCaptcha");
+  } catch (error) {
+    console.error("Error solving captcha:", error);
+    return { solved: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 async function getRawScreenshot(
   targetUrl: string,
   requestSessionId: string,
@@ -177,6 +203,36 @@ async function getRawScreenshot(
     const page = await context.newPage();
 
     await setupPage(page, requestSessionId, options);
+
+    // Setup captcha handling if enabled
+    if (options.solveCaptchas !== false) {
+      try {
+        // Create a CDP session for captcha solving
+        const cdp = await context.newCDPSession(page);
+        
+        // Start monitoring for captchas in the background
+        const captchaPromise = waitForCaptcha(cdp).then(async () => {
+          console.log(`[screenshotService] [${requestSessionId}] Captcha detected for ${targetUrl}, attempting to solve...`);
+          const result = await solveCaptcha(cdp);
+          if (result.solved) {
+            console.log(`[screenshotService] [${requestSessionId}] Captcha solved successfully for ${targetUrl}`);
+          } else {
+            console.error(`[screenshotService] [${requestSessionId}] Failed to solve captcha for ${targetUrl}: ${result.error}`);
+          }
+          return result;
+        });
+        
+        // Store the captcha promise to check later
+        const captchaTimeout = setTimeout(() => {
+          console.log(`[screenshotService] [${requestSessionId}] No captcha detected within timeout for ${targetUrl}`);
+        }, 5000);
+        
+        // We'll continue with the page load while monitoring for captchas
+        captchaPromise.then(() => clearTimeout(captchaTimeout)).catch(() => clearTimeout(captchaTimeout));
+      } catch (error) {
+        console.error(`[screenshotService] [${requestSessionId}] Error setting up captcha detection: ${error}`);
+      }
+    }
 
     // Add initial scrollbar hiding
     await page.addStyleTag({
@@ -275,7 +331,7 @@ async function getRawScreenshot(
 export async function takeScreenshotWithBrowserless(
   targetUrl: string,
   requestSessionId: string = crypto.randomUUID(),
-  options: ScreenshotOptions = {}
+  options: ScreenshotOptions = { solveCaptchas: true }
 ): Promise<{
   buffer: Buffer;
   sessionId: string;
