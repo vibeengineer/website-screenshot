@@ -1,6 +1,5 @@
 import * as fsPromises from "node:fs/promises";
 import * as path from "node:path";
-// import { SELF } from "cloudflare:test"; // No longer needed
 import { beforeAll, describe, expect, it } from "vitest";
 
 interface AttemptResult {
@@ -14,14 +13,10 @@ interface AttemptResult {
   filePath?: string; // To store the path of the saved image file
 }
 
-// This describe block will be skipped if Browser Rendering is not truly available.
-// For local Miniflare tests, we expect Puppeteer to fail, but we can test the queue.
-
-const BASE_URL = "http://localhost:8787";
+const BASE_URL = "http://localhost:3000";
 
 // A list of diverse and generally reliable URLs for testing
 const TARGET_SCREENSHOT_URLS = [
-  "https://www.cloudflare.com",
   "https://www.wikipedia.org",
   "https://www.github.com",
   "https://www.vitest.dev",

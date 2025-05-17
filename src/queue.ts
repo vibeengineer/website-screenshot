@@ -1,5 +1,5 @@
 import { MAX_CONCURRENT_BROWSER_SESSIONS, QUEUE_TIMEOUT } from "./constants";
-import { NoAvailableSessionError, QueueTimeoutError } from "./errors";
+import { QueueTimeoutError } from "./errors";
 
 export interface QueuedRequest {
   id: string;
@@ -18,6 +18,7 @@ export class ScreenshotQueueManager {
   private processing = false;
   private pendingRequests = new Map<string, PendingRequest>();
   private readonly activeSessions = new Set<string>();
+  private _lastQueueLogTime = 0;
 
   hasQueuedItems(): boolean {
     return this.queue.length > 0;
@@ -39,6 +40,11 @@ export class ScreenshotQueueManager {
     void this.processQueue();
     return promise;
   }
+  
+  // Public method to process the next item in the queue
+  processNextQueueItem(): void {
+    void this.processQueue();
+  }
 
   private async processQueue(): Promise<void> {
     if (this.processing) return;
@@ -50,12 +56,21 @@ export class ScreenshotQueueManager {
       if (this.queue.length === 0) return;
 
       if (!this.canProcessNewJob()) {
-        // All slots busy, throw NoAvailableSessionError to match original behavior
-        throw new NoAvailableSessionError("All sessions busy");
+        // All slots busy, we'll process this queue item when a slot becomes available
+        // Only log periodically to reduce noise
+        const now = Date.now();
+        if (!this._lastQueueLogTime || now - this._lastQueueLogTime > 5000) {
+          console.log(`[queue] All ${MAX_CONCURRENT_BROWSER_SESSIONS} browser sessions busy. Queued jobs: ${this.queue.length}`);
+          this._lastQueueLogTime = now;
+        }
+        return;
       }
       
       const job = this.queue.shift();
-      if (job) void this.executeJob(job);
+      if (job) {
+        console.log(`[queue] Processing job for URL: ${job.targetUrl} (Queue size: ${this.queue.length})`);
+        void this.executeJob(job);
+      }
     } finally {
       this.processing = false;
       if (this.queue.length > 0) {

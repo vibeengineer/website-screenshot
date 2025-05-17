@@ -1,4 +1,5 @@
 import Browserbase from "@browserbasehq/sdk";
+import type { APIPromise } from "@browserbasehq/sdk/src/core.js";
 import { PlaywrightBlocker } from "@ghostery/adblocker-playwright";
 import fetch from "cross-fetch";
 import { chromium } from "playwright-core";
@@ -73,6 +74,12 @@ interface RawScreenshotResult {
   sessionId: string;
 }
 
+// Track active sessions for reuse
+let activeSession: { id: string; connectUrl: string; lastUsed: number } | null = null;
+
+// Check if keep-alive is enabled via environment variable
+const ENABLE_KEEP_ALIVE = process.env.ENABLE_KEEP_ALIVE === "true";
+
 function validateBrowserbaseCredentials(): { apiKey: string; projectId: string } {
   const apiKey = process.env.BROWSERBASE_API_KEY;
   const projectId = process.env.BROWSERBASE_PROJECT_ID;
@@ -132,29 +139,83 @@ async function getRawScreenshot(
   const bb = new Browserbase({ apiKey });
   let browser: Browser | null = null;
   let browserbaseSessionId: string | undefined;
+  let sessionResponse: Browserbase.Sessions.SessionCreateResponse;
+  let usingExistingSession = false;
+  let lastQueueLogTime = 0;
 
   try {
-    console.log(
-      `[screenshotService] [${requestSessionId}] Creating Browserbase session for URL: ${targetUrl}`
-    );
+    // Only try to reuse sessions if keep-alive is enabled
+    if (ENABLE_KEEP_ALIVE && activeSession && queueManager.hasQueuedItems()) {
+      try {
+        console.log(
+          `[screenshotService] [${requestSessionId}] Reusing existing Browserbase session ${activeSession.id} for URL: ${targetUrl}`
+        );
 
-    const browserSettings = createBrowserSettings(options);
-    const session = await bb.sessions.create({
-      projectId,
-      browserSettings,
-      proxies: options.proxies !== undefined ? options.proxies : getDefaultProxySettings(),
-    });
+        browserbaseSessionId = activeSession.id;
+        browser = await connectToBrowser(activeSession.connectUrl);
+        usingExistingSession = true;
 
-    browserbaseSessionId = session.id;
-    console.log(
-      `[screenshotService] [${requestSessionId}] Browserbase session ${browserbaseSessionId} created. Connecting...`
-    );
+        console.log(
+          `[screenshotService] [${requestSessionId}] Successfully reconnected to session ${browserbaseSessionId}`
+        );
+      } catch (reconnectError) {
+        console.error(
+          `[screenshotService] [${requestSessionId}] Failed to reuse existing session, creating new one:`,
+          reconnectError
+        );
+        activeSession = null; // Reset the active session since we couldn't reconnect
+      }
+    }
 
-    browser = await connectToBrowser(session.connectUrl);
+    // Create a new session if we couldn't reuse an existing one
+    if (!browser) {
+      console.log(
+        `[screenshotService] [${requestSessionId}] Creating new Browserbase session for URL: ${targetUrl}`
+      );
 
-    console.log(
-      `[screenshotService] [${requestSessionId}] Connected to Browserbase session ${browserbaseSessionId}.`
-    );
+      const browserSettings = createBrowserSettings(options);
+
+      // Only use keep-alive when enabled and there are items in the queue
+      const hasQueuedItems = queueManager.hasQueuedItems();
+      const useKeepAlive = ENABLE_KEEP_ALIVE && hasQueuedItems;
+      
+      const sessionParams: Browserbase.Sessions.SessionCreateParams = {
+        projectId,
+        browserSettings,
+        proxies: options.proxies !== undefined ? options.proxies : getDefaultProxySettings(),
+      };
+      
+      // Only add keepAlive parameter if enabled
+      if (useKeepAlive) {
+        sessionParams.keepAlive = true;
+      }
+      
+      sessionResponse = await bb.sessions.create(sessionParams);
+
+      browserbaseSessionId = sessionResponse.id;
+
+      // Only log new session creation, not every queue item
+      if (Date.now() - lastQueueLogTime > 5000 && hasQueuedItems) {
+        console.log(
+          `[screenshotService] [${requestSessionId}] Created Browserbase session ${browserbaseSessionId} with keep-alive. Queued items: ${
+            hasQueuedItems ? "Yes" : "No"
+          }`
+        );
+        lastQueueLogTime = Date.now();
+      }
+
+      // SessionCreateResponse has connectUrl property
+      browser = await connectToBrowser(sessionResponse.connectUrl);
+
+      // Store session for potential reuse if keep-alive is enabled
+      if (ENABLE_KEEP_ALIVE && useKeepAlive && hasQueuedItems) {
+        activeSession = {
+          id: sessionResponse.id,
+          connectUrl: sessionResponse.connectUrl,
+          lastUsed: Date.now(),
+        };
+      }
+    }
 
     if (!browser.isConnected()) {
       throw new BrowserConnectionError("Browser disconnected immediately after connection");
@@ -164,10 +225,6 @@ async function getRawScreenshot(
     const page: Page = defaultContext.pages()[0] || (await defaultContext.newPage());
 
     await setupPage(page, requestSessionId, options);
-
-    console.log(
-      `[screenshotService] [${requestSessionId}] Navigating to ${targetUrl} in session ${browserbaseSessionId}`
-    );
     await page.setViewportSize({ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT });
 
     // Add initial scrollbar hiding
@@ -215,38 +272,94 @@ async function getRawScreenshot(
       document.head.appendChild(style);
     });
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
 
-    const screenshotBuffer = await page.screenshot();
-    console.log(
-      `[screenshotService] [${requestSessionId}] Raw screenshot taken for ${targetUrl}. Size: ${screenshotBuffer.length} bytes.`
-    );
+    // Add timeout to screenshot operation
+    const screenshotPromise = page.screenshot();
+    const timeoutPromise = new Promise<Buffer>((_, reject) => {
+      setTimeout(() => reject(new ScreenshotTimeoutError("Screenshot capture timed out")), 5000);
+    });
 
+    const screenshotBuffer = await Promise.race([screenshotPromise, timeoutPromise]);
+
+    // Update last used time for session
+    if (activeSession && browserbaseSessionId === activeSession.id) {
+      activeSession.lastUsed = Date.now();
+    }
+
+    if (!browserbaseSessionId) {
+      throw new Error("No browserbase session ID available");
+    }
+    
     return {
       buffer: screenshotBuffer,
       sessionId: browserbaseSessionId,
     };
   } catch (error) {
     console.error(
-      `[screenshotService] [${requestSessionId}] Error getting raw screenshot for ${targetUrl} with Browserbase:`,
+      `[screenshotService] [${requestSessionId}] Error getting raw screenshot for ${targetUrl}:`,
       error
     );
+
+    // If this was a reused session that failed, clear it
+    if (usingExistingSession && activeSession) {
+      console.log(`[screenshotService] [${requestSessionId}] Clearing failed reused session`);
+      activeSession = null;
+    }
+
     throw error;
   } finally {
-    await cleanupResources(browser, browserbaseSessionId, bb, projectId, requestSessionId);
+    // Only keep session alive if enabled and we have an active session with queued items
+    if (!ENABLE_KEEP_ALIVE || !activeSession || !queueManager.hasQueuedItems()) {
+      await cleanupResources(browser, browserbaseSessionId, bb, projectId, requestSessionId);
+    } else if (browser) {
+      // Just close the browser connection but keep the session alive (keep-alive is enabled)
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error(
+          `[screenshotService] [${requestSessionId}] Error closing browser:`,
+          closeError
+        );
+      }
+    }
   }
 }
 
-async function connectToBrowser(connectUrl: string): Promise<Browser> {
-  const browserPromise = chromium.connectOverCDP(connectUrl);
-  const timeoutPromise = new Promise<Browser>((_, reject) => {
-    setTimeout(
-      () => reject(new BrowserConnectionError("Browser connection timed out")),
-      BROWSER_CONNECT_TIMEOUT
-    );
-  });
+async function connectToBrowser(connectUrl: string, retryAttempts = 2): Promise<Browser> {
+  let lastError: Error | undefined;
 
-  return Promise.race([browserPromise, timeoutPromise]);
+  for (let attempt = 0; attempt <= retryAttempts; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(
+          `[screenshotService] Retrying browser connection (attempt ${attempt}/${retryAttempts})`
+        );
+        // Small delay before retry
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      const browserPromise = chromium.connectOverCDP(connectUrl);
+      const timeoutPromise = new Promise<Browser>((_, reject) => {
+        setTimeout(
+          () => reject(new BrowserConnectionError("Browser connection timed out")),
+          BROWSER_CONNECT_TIMEOUT
+        );
+      });
+
+      return await Promise.race([browserPromise, timeoutPromise]);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(
+        `[screenshotService] Browser connection attempt ${attempt + 1}/${
+          retryAttempts + 1
+        } failed:`,
+        lastError.message
+      );
+    }
+  }
+
+  throw lastError || new BrowserConnectionError("Failed to connect to browser after retries");
 }
 
 async function setupPage(
@@ -312,17 +425,32 @@ async function cleanupResources(
   if (browserbaseSessionId) {
     try {
       const hasMoreItems = queueManager.hasQueuedItems();
-      if (!hasMoreItems) {
+
+      // If keep-alive is enabled, we have an active session and there are more items in the queue, keep it alive
+      if (ENABLE_KEEP_ALIVE && activeSession && activeSession.id === browserbaseSessionId && hasMoreItems) {
+        // Don't log every time, only if this is the first item or last processed
+        console.log(
+          `[screenshotService] [${requestSessionId}] Keeping keep-alive session ${browserbaseSessionId} active for queued items.`
+        );
+
+        // Trigger the queue processor to handle the next item
+        setTimeout(() => {
+          void queueManager.processNextQueueItem();
+        }, 100);
+      } else if (!hasMoreItems || !activeSession || activeSession.id !== browserbaseSessionId) {
+        // Release the session if there are no more items or this isn't our active session
         await bb.sessions.update(browserbaseSessionId, {
           status: "REQUEST_RELEASE",
           projectId,
         });
+
+        // If this was our active session, clear it
+        if (activeSession && activeSession.id === browserbaseSessionId) {
+          activeSession = null;
+        }
+
         console.log(
-          `[screenshotService] [${requestSessionId}] Browserbase session ${browserbaseSessionId} released - no more items in queue.`
-        );
-      } else {
-        console.log(
-          `[screenshotService] [${requestSessionId}] Keeping Browserbase session ${browserbaseSessionId} alive for queued items.`
+          `[screenshotService] [${requestSessionId}] Browserbase session ${browserbaseSessionId} released.`
         );
       }
     } catch (terminateError) {
@@ -330,10 +458,19 @@ async function cleanupResources(
         `[screenshotService] [${requestSessionId}] Error managing Browserbase session:`,
         terminateError
       );
+
+      // If there was an error, clear the active session reference
+      if (activeSession && activeSession.id === browserbaseSessionId) {
+        activeSession = null;
+      }
     }
-    console.log(
-      `[screenshotService] [${requestSessionId}] Session ${browserbaseSessionId} processing finished. View replay at https://browserbase.com/sessions/${browserbaseSessionId}`
-    );
+
+    // Only log this for the final release
+    if (!activeSession || activeSession.id !== browserbaseSessionId) {
+      console.log(
+        `[screenshotService] [${requestSessionId}] Session ${browserbaseSessionId} processing finished. View replay at https://browserbase.com/sessions/${browserbaseSessionId}`
+      );
+    }
   }
 }
 
