@@ -33,16 +33,25 @@ async function getBrowserlessUrl(): Promise<string> {
 async function getConnectUrl(): Promise<string> {
   const browserlessUrl = await getBrowserlessUrl();
   const token = process.env.BROWSERLESS_TOKEN;
-  
+
   // Based on browserless documentation and configuration
   // Just use the base websocket URL without the /playwright path
-  let wsEndpoint = `${browserlessUrl.replace('http', 'ws')}`;
-  
+  let wsEndpoint = `${browserlessUrl.replace("http", "ws")}`;
+
   // Add token if provided (required for authentication)
   if (token) {
     wsEndpoint += `?token=${token}`;
   }
-  
+
+  // Add anti-captcha and bot detection bypass args
+  const launchArgs = JSON.stringify({
+    headless: false,
+    stealth: true,
+  });
+
+  // Append launch args to the URL
+  wsEndpoint += wsEndpoint.includes("?") ? `&launch=${launchArgs}` : `?launch=${launchArgs}`;
+
   return wsEndpoint;
 }
 
@@ -153,9 +162,17 @@ async function getRawScreenshot(
       activeBrowser = browser; // Store for potential reuse
     }
 
-    // Create a new context and page
+    // Create a new context and page with anti-bot-detection settings
     const context = await browser.newContext({
-      viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }
+      viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+      hasTouch: true,
+      isMobile: false,
+      deviceScaleFactor: 1,
+      javaScriptEnabled: true,
+      bypassCSP: true,
+      ignoreHTTPSErrors: true,
     });
     const page = await context.newPage();
 
@@ -182,7 +199,6 @@ async function getRawScreenshot(
       timeout: PAGE_GOTO_TIMEOUT,
     });
 
-    // Ensure scrollbar is hidden after page load
     await page.evaluate(() => {
       document.documentElement.style.overflow = "hidden";
       document.body.style.overflow = "hidden";
@@ -206,19 +222,16 @@ async function getRawScreenshot(
       document.head.appendChild(style);
     });
 
-    await page.waitForTimeout(1000);
-
-    // Add timeout to screenshot operation
     const screenshotPromise = page.screenshot();
     const timeoutPromise = new Promise<Buffer>((_, reject) => {
       setTimeout(() => reject(new ScreenshotTimeoutError("Screenshot capture timed out")), 5000);
     });
 
     const screenshotBuffer = await Promise.race([screenshotPromise, timeoutPromise]);
-    
+
     // Close the context to clean up
     await context.close();
-    
+
     return screenshotBuffer;
   } catch (error) {
     console.error(
@@ -232,7 +245,10 @@ async function getRawScreenshot(
       try {
         await activeBrowser.close();
       } catch (closeError) {
-        console.error(`[screenshotService] [${requestSessionId}] Error closing browser:`, closeError);
+        console.error(
+          `[screenshotService] [${requestSessionId}] Error closing browser:`,
+          closeError
+        );
       }
       activeBrowser = null;
     }
@@ -273,11 +289,7 @@ export async function takeScreenshotWithBrowserless(
 
     checkTimeout(startTime);
 
-    const rawBuffer = await getRawScreenshot(
-      targetUrl,
-      requestSessionId,
-      options
-    );
+    const rawBuffer = await getRawScreenshot(targetUrl, requestSessionId, options);
 
     console.log(
       `[screenshotService] [${requestSessionId}] Generating styled image for ${targetUrl}`
