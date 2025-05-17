@@ -1,20 +1,28 @@
 {
   "name": "website-screenshot",
   "scripts": {
-    "dev": "wrangler dev --remote",
-    "deploy": "wrangler deploy --minify",
-    "types": "npx wrangler types",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
     "test:node-screenshots": "node test/save-screenshots-node.js"
   },
   "dependencies": {
-    "@cloudflare/puppeteer": "^1.0.2",
-    "hono": "^4.7.9"
+    "@browserbasehq/sdk": "^2.6.0",
+    "@ghostery/adblocker-playwright": "^2.5.2",
+    "@hono/node-server": "^1.12.0",
+    "canvas": "^3.1.0",
+    "cross-fetch": "^4.1.0",
+    "dotenv": "^16.5.0",
+    "hono": "^4.7.9",
+    "jimp": "^1.6.0",
+    "playwright-core": "^1.52.0"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
-    "@cloudflare/vitest-pool-workers": "^0.8.30",
     "@types/node": "^22.15.18",
-    "vitest": "~3.1.3",
-    "wrangler": "^4.4.0"
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4",
+    "vitest": "~3.1.3"
   }
 }

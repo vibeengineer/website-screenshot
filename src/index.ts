@@ -1,9 +1,22 @@
+import { serve } from "@hono/node-server";
+import { config } from "dotenv";
 import { Hono } from "hono";
 
-import type { StatusCode } from "hono/utils/http-status";
-import type { ScreenshotBrowserDO } from "./browser-durable-object"; // Ensure ScreenshotBrowserDO is imported if type is used for stub
+config();
 
-const app = new Hono<{ Bindings: Env }>();
+import { queueManager } from "./queue";
+import { takeScreenshotWithBrowserbase } from "./screenshot";
+
+queueManager.setScreenshotExecutor(async (targetUrl, sessionId) => {
+  const result = await takeScreenshotWithBrowserbase(targetUrl, sessionId);
+  return result.buffer;
+});
+
+const app = new Hono();
+
+app.get("/", (c) => {
+  return c.text("Hello Node.js from Hono!");
+});
 
 app.get("/screenshot", async (c) => {
   const targetUrl = c.req.query("url");
@@ -13,40 +26,49 @@ app.get("/screenshot", async (c) => {
   }
 
   try {
-    const doId = c.env.SCREENSHOT_BROWSER_DO.idFromName("default-browser-instance");
-    // It's good practice to type the stub if you know the DO's interface,
-    // though not strictly necessary for RPC to work if methods are public.
-    const stub = c.env.SCREENSHOT_BROWSER_DO.get(doId) as unknown as ScreenshotBrowserDO;
+    console.log(`[index.ts] Received screenshot request for URL: ${targetUrl}`);
+    
+    const result = await queueManager.queueScreenshotJob(targetUrl);
 
-    // Call the RPC method - directOutput is now implicit
-    const result = await stub.takeScreenshotJob(targetUrl);
+    console.log(
+      `[index.ts] Screenshot successful for ${targetUrl}, session ID: ${result.sessionId}`
+    );
 
-    // Result is always ArrayBuffer
-    return new Response(result, { headers: { "Content-Type": "image/png" }, status: 200 });
+    c.header("Content-Type", "image/png");
+    c.header("X-Browserbase-Session-Id", result.sessionId);
+    return c.body(result.buffer);
   } catch (error) {
-    console.error("Error in /screenshot endpoint (RPC call to DO):", error);
-
-    let message = "Failed to process screenshot request via RPC";
-    let status: StatusCode = 500;
-    const headers: Record<string, string> = {};
-
+    console.error(`[index.ts] Error in /screenshot route for ${targetUrl}:`, error);
+    let message = "Failed to take screenshot.";
     if (error instanceof Error) {
       message = error.message;
-      if (error.name === "NoAvailableSessionError") {
-        status = 503; // Service Unavailable
-        headers["Retry-After"] = "30";
-      } else if (error.message?.includes("timed out in queue")) {
-        status = 504; // Gateway Timeout
-      } else if (error.message?.includes("timed out")) {
-        // More generic timeout from DO operations
-        status = 504; // Gateway Timeout
-      }
-      // Add more specific error checks if the DO can throw other distinct error types/names
     }
-
-    return c.text(message, status, headers);
+    return c.text(message, 500);
   }
 });
 
+const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 3000;
+console.log(`Server is running on port ${port}`);
+
+const server = serve({
+  fetch: app.fetch,
+  port: port,
+});
+
+process.on("SIGINT", () => {
+  console.log("SIGINT received, shutting down gracefully...");
+  server.close(() => {
+    console.log("Server closed.");
+    process.exit(0);
+  });
+});
+
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully...");
+  server.close(() => {
+    console.log("Server closed.");
+    process.exit(0);
+  });
+});
+
 export default app;
-export * from "./browser-durable-object";
