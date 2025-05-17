@@ -1,5 +1,5 @@
-export const VIEWPORT_WIDTH = 1366;
-export const VIEWPORT_HEIGHT = 768;
+export const VIEWPORT_WIDTH = 1304;
+export const VIEWPORT_HEIGHT = 910;
 
 export const MINUTE = 60_000;
 export const PAGE_GOTO_TIMEOUT = 15_000;
