@@ -1,74 +1,39 @@
 import { serve } from "@hono/node-server";
-import { config } from "dotenv";
-import { Hono } from "hono";
+import { env } from "./utils/env.js";
+import { logger } from "./utils/logger.js";
 
-config();
+import { createQueueManager } from "./queue/manager.js";
+import { renderTemplate } from "./rendering/template-renderer.js";
+import { createBrowserManager } from "./screenshot/browser-manager.js";
+import { createScreenshotService } from "./screenshot/index.js";
+import { setupPage } from "./screenshot/page-setup.js";
+import { createHttpServer } from "./server/http-server.js";
 
-import { queueManager } from "./queue";
-import { takeScreenshotWithBrowserless } from "./screenshot";
-
-queueManager.setScreenshotExecutor(async (targetUrl, sessionId) => {
-  const result = await takeScreenshotWithBrowserless(targetUrl, sessionId);
-  return result.buffer;
+const browserManager = createBrowserManager(env, logger);
+const screenshotService = createScreenshotService({
+  browserManager,
+  renderTemplate,
+  logger,
+  setupPage,
+});
+const queue = createQueueManager({
+  screenshotService,
+  logger,
+  timeout: env.QUEUE_TIMEOUT,
+  concurrency: env.MAX_CONCURRENT_BROWSER_SESSIONS,
 });
 
-const app = new Hono();
-
-app.get("/", (c) => {
-  return c.notFound();
-});
-
-app.get("/screenshot", async (c) => {
-  const targetUrl = c.req.query("url");
-
-  if (!targetUrl) {
-    return c.json({ error: "Invalid request payload", success: false, data: null }, 400);
-  }
-
-  try {
-    console.log(`[index.ts] Received screenshot request for URL: ${targetUrl}`);
-
-    const result = await queueManager.queueScreenshotJob(targetUrl);
-
-    console.log(
-      `[index.ts] Screenshot successful for ${targetUrl}, session ID: ${result.sessionId}`
-    );
-
-    c.header("Content-Type", "image/png");
-    c.header("X-Browserless-Session-Id", result.sessionId);
-    return c.body(result.buffer);
-  } catch (error) {
-    console.error(`[index.ts] Error in /screenshot route for ${targetUrl}:`, error);
-    let message = "Failed to take screenshot.";
-    if (error instanceof Error) {
-      message = error.message;
-    }
-    return c.text(message, 500);
-  }
-});
-
-const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 3000;
-console.log(`Server is running on port ${port}`);
+const app = createHttpServer(queue, logger);
 
 const server = serve({
   fetch: app.fetch,
-  port: port,
+  port: env.PORT,
 });
 
-process.on("SIGINT", () => {
-  console.log("SIGINT received, shutting down gracefully...");
-  server.close(() => {
-    console.log("Server closed.");
-    process.exit(0);
-  });
-});
+logger.info(`HTTP server listening on ${env.PORT}`);
 
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down gracefully...");
-  server.close(() => {
-    console.log("Server closed.");
-    process.exit(0);
-  });
+process.on("SIGINT", async () => {
+  logger.info("SIGINT received – shutting down");
+  await browserManager.closeAll();
+  server.close();
 });
-
-export default app;
