@@ -12,9 +12,11 @@ WORKDIR /app
 
 # 2️⃣  deps & build
 COPY package.json pnpm-lock.yaml ./
-RUN npm i -g pnpm && pnpm install --prod
+RUN npm i -g pnpm \
+     && pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm build
+RUN pnpm run build
+RUN pnpm prune --prod
 
 ENV PORT=3000
 ENV BROWSERLESS_WS=ws://browserless:3000/?token=browserless_token
