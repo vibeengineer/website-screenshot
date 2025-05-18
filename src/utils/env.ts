@@ -9,6 +9,8 @@ const schema = z.object({
 
   BROWSERLESS_URL: z.string().url().default("http://localhost:3100"),
   BROWSERLESS_TOKEN: z.string().optional(),
+  CAPTCHA_TOKEN: z.string().optional(),
+  PROXY_DEFAULT: z.string().url().optional(),
 
   ENABLE_KEEP_ALIVE: z.coerce.boolean().default(true),
   MAX_CONCURRENT_BROWSER_SESSIONS: z.coerce.number().min(1).default(5),

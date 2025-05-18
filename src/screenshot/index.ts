@@ -33,6 +33,11 @@ export function createScreenshotService({
       "page.goto timed out"
     );
 
+    if ((page as any).waitUntilClean) {
+      await (page as any).waitUntilClean();
+      console.log("…waitUntilClean done");
+    }
+
     const raw = await page.screenshot();
     await context.close();
 

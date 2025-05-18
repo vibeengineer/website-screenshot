@@ -1,13 +1,12 @@
 import { serve } from "@hono/node-server";
-import { env } from "./utils/env.js";
-import { logger } from "./utils/logger.js";
-
 import { createQueueManager } from "./queue/manager.js";
 import { renderTemplate } from "./rendering/template-renderer.js";
 import { createBrowserManager } from "./screenshot/browser-manager.js";
 import { createScreenshotService } from "./screenshot/index.js";
 import { setupPage } from "./screenshot/page-setup.js";
 import { createHttpServer } from "./server/http-server.js";
+import { env } from "./utils/env.js";
+import { logger } from "./utils/logger.js";
 
 const browserManager = createBrowserManager(env, logger);
 const screenshotService = createScreenshotService({
