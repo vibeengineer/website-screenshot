@@ -13,7 +13,7 @@ interface AttemptResult {
   filePath?: string; // To store the path of the saved image file
 }
 
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = "https://website-screenshot.up.railway.app";
 
 // A list of diverse and generally reliable URLs for testing
 const TARGET_SCREENSHOT_URLS = [
