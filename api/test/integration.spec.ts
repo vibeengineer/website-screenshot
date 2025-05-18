@@ -115,7 +115,7 @@ describe("Screenshot Worker Integration Tests (Node.js Env)", () => {
               attempt: attemptNumber,
               status: response.status,
               ok: response.ok,
-              headers: Object.fromEntries(response.headers),
+              headers: Object.fromEntries(response.headers as any),
             };
             try {
               const contentType = response.headers.get("content-type");
