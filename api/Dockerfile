@@ -11,9 +11,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # 2️⃣  deps & build
-COPY api/package.json api/pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 RUN npm i -g pnpm && pnpm install --prod
-COPY api .
+COPY . .
 RUN pnpm build
 
 ENV PORT=3000
