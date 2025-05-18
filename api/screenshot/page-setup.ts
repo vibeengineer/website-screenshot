@@ -1,4 +1,3 @@
-// biome-ignore lint/suspicious/noExplicitAny: 3rd-party CJS modules
 import { PlaywrightBlocker } from "@ghostery/adblocker-playwright";
 import fetch from "cross-fetch";
 import { getInjectableScript } from "idcac-playwright";

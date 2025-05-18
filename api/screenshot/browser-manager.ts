@@ -4,10 +4,9 @@ import playwright from "playwright";
 import { addExtra } from "playwright-extra";
 import RecaptchaMod from "puppeteer-extra-plugin-recaptcha";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
-
-import { unwrap } from "@/utils/unwrap-cjs-default.js";
 import { BrowserConnectionError } from "../errors/index.js";
 import type { Env } from "../utils/env.js";
+import { unwrap } from "../utils/unwrap-cjs-default.js";
 
 const RecaptchaPlugin = unwrap(RecaptchaMod);
 const ProxyRouter = unwrap(ProxyRouterMod);

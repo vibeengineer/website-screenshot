@@ -1,18 +1,22 @@
 {
   "name": "website-screenshot",
+  "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.15.18"
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "concurrently \"docker run -p 3100:3000 --rm ghcr.io/browserless/chromium:latest\" \"tsx watch src/index.ts\"",
-    "dev:api": "tsx watch src/index.ts",
+    "dev": "concurrently \"pnpm dev:browserless\" \"pnpm dev:api\"",
+    "dev:api": "tsx watch index.ts",
     "dev:browserless": "docker run -p 3100:3000 --rm ghcr.io/browserless/chromium:latest",
+
     "build": "tsc",
     "start": "node dist/index.js",
-    "docker:build": "docker-compose build",
-    "docker:up": "docker-compose up",
-    "docker:down": "docker-compose down",
+
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up",
+    "docker:down": "docker compose down",
+
     "test": "vitest",
     "test:node-screenshots": "node test/save-screenshots-node.js"
   },
