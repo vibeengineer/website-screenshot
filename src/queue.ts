@@ -1,11 +1,11 @@
 import { MAX_CONCURRENT_BROWSER_SESSIONS, QUEUE_TIMEOUT } from "./constants";
 import { QueueTimeoutError } from "./errors";
 
-export interface QueuedRequest {
+export type QueuedRequest = {
   id: string;
   targetUrl: string;
   enqueueTime: number;
-}
+};
 
 type PendingRequest = {
   resolve: (buffer: Buffer) => void;
@@ -40,7 +40,7 @@ export class ScreenshotQueueManager {
     void this.processQueue();
     return promise;
   }
-  
+
   // Public method to process the next item in the queue
   processNextQueueItem(): void {
     void this.processQueue();
@@ -52,7 +52,7 @@ export class ScreenshotQueueManager {
 
     try {
       await this.removeStaleJobs();
-      
+
       if (this.queue.length === 0) return;
 
       if (!this.canProcessNewJob()) {
@@ -60,15 +60,19 @@ export class ScreenshotQueueManager {
         // Only log periodically to reduce noise
         const now = Date.now();
         if (!this._lastQueueLogTime || now - this._lastQueueLogTime > 5000) {
-          console.log(`[queue] All ${MAX_CONCURRENT_BROWSER_SESSIONS} browser sessions busy. Queued jobs: ${this.queue.length}`);
+          console.log(
+            `[queue] All ${MAX_CONCURRENT_BROWSER_SESSIONS} browser sessions busy. Queued jobs: ${this.queue.length}`
+          );
           this._lastQueueLogTime = now;
         }
         return;
       }
-      
+
       const job = this.queue.shift();
       if (job) {
-        console.log(`[queue] Processing job for URL: ${job.targetUrl} (Queue size: ${this.queue.length})`);
+        console.log(
+          `[queue] Processing job for URL: ${job.targetUrl} (Queue size: ${this.queue.length})`
+        );
         void this.executeJob(job);
       }
     } finally {
@@ -83,7 +87,7 @@ export class ScreenshotQueueManager {
     while (this.queue.length && this.isJobStale(this.queue[0])) {
       const stale = this.queue.shift();
       if (!stale) break;
-      
+
       this.rejectJob(stale.id, new QueueTimeoutError("Job timed out in queue"));
     }
   }

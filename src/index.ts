@@ -15,19 +15,19 @@ queueManager.setScreenshotExecutor(async (targetUrl, sessionId) => {
 const app = new Hono();
 
 app.get("/", (c) => {
-  return c.text("Hello Node.js from Hono!");
+  return c.notFound();
 });
 
 app.get("/screenshot", async (c) => {
   const targetUrl = c.req.query("url");
 
   if (!targetUrl) {
-    return c.text("Missing 'url' query parameter", 400);
+    return c.json({ error: "Invalid request payload", success: false, data: null }, 400);
   }
 
   try {
     console.log(`[index.ts] Received screenshot request for URL: ${targetUrl}`);
-    
+
     const result = await queueManager.queueScreenshotJob(targetUrl);
 
     console.log(
