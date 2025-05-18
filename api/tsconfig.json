@@ -14,13 +14,13 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "outDir": "./dist",
-    "rootDir": "api",
+    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["api/*"]
+      "@/*": ["./*"]
     },
     "types": ["node"]
   },
-  "include": ["api/**/*.ts", "api/**/*.tsx", "api/types/**/*.d.ts"],
+  "include": ["**/*.ts", "**/*.tsx", "types/**/*.d.ts"],
   "exclude": ["node_modules", "dist"]
 }
