@@ -25,5 +25,5 @@ export const env = schema.parse(process.env) as z.infer<typeof schema> & { BROWS
 export type Env = typeof env;
 
 env.BROWSERLESS_WS =
-  env.BROWSERLESS_URL.replace("http", "ws") +
+  env.BROWSERLESS_URL.replace(/^https?/, "ws") +
   (env.BROWSERLESS_TOKEN ? `?token=${env.BROWSERLESS_TOKEN}` : "");
