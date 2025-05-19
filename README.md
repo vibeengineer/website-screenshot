@@ -56,10 +56,10 @@ https://website-screenshot.up.railway.app/screenshot?url=https://vibe.engineer
 
 ## 🌱 Other branches
 
-| Branch        | Why you’d use it                                              |
-| ------------- | ------------------------------------------------------------- |
-| `cloudflare`  | Fully serverless Worker + Durable Objects                     |
-| `browserbase` | Outsource browsers to [Browserbase](https://browserbase.com/) |
+| Branch        | Why you’d use it                                                                             |
+| ------------- | -------------------------------------------------------------                                |
+| `cloudflare`  | Fully serverless Worker + Durable Objects + Cloudflare Browser Rendering                     |
+| `browserbase` | Outsource browsers to [Browserbase](https://browserbase.com/) cloud                          |
 
 ---
 
