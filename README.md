@@ -14,7 +14,7 @@ Website Screenshot Service is a lightweight, developer‑friendly API for grab
 
 * Blazing‑fast screenshot endpoint with built‑in job queue
 * Canvas overlay pipeline for frames, watermarks, emojis – you name it
-* Playwright + Browserless under the hood (stealth + CAPTCHA support)
+* Playwright + Browserless under the hood (stealth & CAPTCHA support)
 * Works **locally, in Docker, or on cloud runners**
 * Simple `.env` configuration & verbose logging
 * MIT‑licensed, 100 % hack‑able
@@ -32,6 +32,14 @@ pnpm dev            # spins up API + local Browserless container
 docker compose up -d
 ```
 
+### Live demo
+
+Hit the public instance:
+
+```
+https://website-screenshot.up.railway.app/screenshot?url=https://vibe.engineer
+```
+
 ### Railway
 
 1. **Create two services** from this repo – `api` (root dir `api`) and `browserless` (`browserless` folder).
@@ -42,7 +50,7 @@ docker compose up -d
    ws://browserless:3000/?token=YOUR_TOKEN
    ```
 
-   (Railway’s internal DNS lets the API reach the pool privately.)
+   Railway’s internal DNS lets the API reach the Chromium pool privately.
 
 ---
 
@@ -83,10 +91,12 @@ curl "https://api.yourdomain.com/screenshot?url=https://example.com" \
 
 ## 🙌 Made by Vibe Engineer
 
-Website Screenshot Service is crafted and maintained by **[Vibe Engineer](https://vibe.engineer)** – a fractional‑CTO as a subscription that ships. Need an extra pair of hands? [Book a call](https://vibe.engineer)
+Website Screenshot Service is crafted and maintained by **[Vibe Engineer](https://vibe.engineer)** – a fractional‑CTO‑as‑a‑subscription that ships. Have a wild idea or need extra hands? [Book a call](https://vibe.engineer).
 
 ---
 
 ## License
 
-MIT — © Vibe Engineer
+**MIT** — © Vibe Engineer 2025
+
+> **Note on Browserless** ‑ This project uses [browserless/chromium](https://github.com/browserless/chromium) for headless browsing. Browserless itself is dual‑licensed under SSPL‑1.0 **or** the Browserless Commercial License. If you deploy this stack commercially, ensure your usage complies with one of those licenses.
